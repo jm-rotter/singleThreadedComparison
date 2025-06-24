@@ -5,4 +5,3 @@ GPU matrix multiplication with a single thread vs CPU matrix multiplication with
 Allows comparison from O(n^3) CPU vs GPU comparison. 
 
 
-# singleThreadedComparison

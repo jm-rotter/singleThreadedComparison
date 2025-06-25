@@ -31,7 +31,6 @@ double time_in_ms(std::chrono::high_resolution_clock::time_point start,
 Matrix createMatrix(int width, int height) {
 	Matrix mat;
 	mat.width = width;
-	mat.stride = width;
 	mat.height = height;
 	mat.elements = new float[width * height];
 	return mat;

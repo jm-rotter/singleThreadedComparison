@@ -5,17 +5,10 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
+#include <fstream>
 
 
-int main() {
-
-	int a, b, c;
-
-	a = 1024;
-	b = 1024;
-	c = 1024;
-
-	std::cout << "Matrix Multiplicatoin Benchmark with 1024 x 1024 Matrices \n";
+void computeBenchmark(int a, int b, int c, std::ofstream& outfile, bool verbose) {
 
 	Matrix mat1 = createMatrix(a, b);
 	Matrix mat2 = createMatrix(b, c);
@@ -29,20 +22,57 @@ int main() {
 	cpu_matmul(mat1, mat2, cpuSingleRes);
 	auto t2 = std::chrono::high_resolution_clock::now();
 	double cpuTime = time_in_ms(t1, t2);
-	std::cout << "CPU Time: " << cpuTime << " ms\n";
+
+	Matrix d_mat1, d_mat2, d_res_mat;
+    d_mat1.width = mat1.width; d_mat1.height = mat1.height; 
+    d_mat2.width = mat2.width; d_mat2.height = mat2.height;
+    d_res_mat.width = gpuSingleRes.width; d_res_mat.height = gpuSingleRes.height;
 
 
+	cudaMalloc(&d_mat1.elements, mat1.width * mat1.height * sizeof(float));
+	cudaMalloc(&d_mat2.elements, mat2.width * mat2.height * sizeof(float));
+	cudaMalloc(&d_res_mat.elements, gpuSingleRes.width * gpuSingleRes.height * sizeof(float));
 
+	cudaMemcpy(d_mat1.elements, mat1.elements, mat1.width * mat1.height * sizeof(float), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_mat2.elements, mat2.elements, mat2.width * mat2.height* sizeof(float), cudaMemcpyHostToDevice);
+
+	cudaDeviceSynchronize();
 	t1 = std::chrono::high_resolution_clock::now();
-	matmul_kernel<<<1, 1>>> (mat1,mat2, gpuSingleRes);
+	matmul_kernel<<<1, 1>>> (d_mat1,d_mat2, d_res_mat);
 	cudaDeviceSynchronize();
 	t2 = std::chrono::high_resolution_clock::now();
+
+
+	cudaMemcpy(gpuSingleRes.elements, d_res_mat.elements, gpuSingleRes.width * gpuSingleRes.height * sizeof(float), cudaMemcpyDeviceToHost);
+
+	cudaFree(d_mat1.elements);
+	cudaFree(d_mat2.elements);
+	cudaFree(d_res_mat.elements);
+
 	double gpuSingleTime = time_in_ms(t1, t2);
-	std::cout << "GPU Single Time: " << gpuSingleTime << " ms\n";
 
-	std::cout << "Comparison: " << (compare(gpuSingleRes, cpuSingleRes) ? "CPU result = GPU Naive result" : "CPU result != GPU Naive Result") << "\n";
+	if(verbose) {
+		outfile << cpuTime << "," << gpuSingleTime << "," << gpuSingleTime / cpuTime << "," << a << "," << compare(gpuSingleRes, cpuSingleRes) << "\n";	
+	}
+}
 
+int main() {
+	std::ofstream outfile("results.csv");
+	
+	if(!outfile) {
+		std::cerr << "Error could not open results.csv\n";
+		return 1;
+	}
+	outfile << "cpuTime,gpuTime,cpuSpeedUp,matrixSize,compare\n";
 
-	std::cout << "Speedup CPU -> GPU: " << cpuSingleTime / gpuSingleRes << "\n";
+	int a, b, c;
+	a = b = c = 128;
+
+	for(int i = 32; i <= 1024; i *=2){
+		a = b = c = i;
+		for(int j = 0; j < 13; j++) {
+			j < 3 ? computeBenchmark(a,  b, c, outfile, false) : computeBenchmark(a, b, c, outfile, true);
+		}
+	}
 
 }
